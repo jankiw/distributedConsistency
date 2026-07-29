@@ -1,8 +1,13 @@
 import asyncio
 import copy
+import os
 
+os.environ["RAY_DEDUP_LOGS"] = "0"
+import ray
 from pandas.io.formats import console
+from ray.actor import ActorHandle
 
+import coordinator
 import fogService
 
 from eclypse.remote.service import Service
@@ -67,6 +72,7 @@ class CloudService(Service):
     op_assocs: dict = None
     fog_clocks: dict = None
     fog_contacts: dict = None
+    coordinator: ActorHandle
 
 #======================================================================================================================
 
@@ -77,11 +83,13 @@ class CloudService(Service):
     async def step(self):
         if self.i == 0:
             await self._first_step()
-
-        await self._empty_queue()
-        self.i += 1
-        await asyncio.sleep(1)
-        return self.i
+        while True:
+            # self.i += 1
+            await self._empty_queue()
+            await asyncio.sleep(vars.FOG_QUEUE_TIMER)
+            if await self.coordinator.is_end.remote():
+                break
+        return 1
 
     async def _first_step(self):
         self.vector_clock = {}
@@ -94,6 +102,13 @@ class CloudService(Service):
         _set_queue_lock()
         _set_history_lock()
         _set_fog_lock()
+
+        try:
+            self.coordinator = coordinator.ServiceCoordinator.options(name=vars.COORDINATOR_NAME,
+                                                                      namespace=vars.COORDINATOR_NAMESPACE).remote(
+                user_count=vars.USER_COUNT)
+        except:
+            self.coordinator = ray.get_actor(vars.COORDINATOR_NAME, namespace=vars.COORDINATOR_NAMESPACE)
 
         node_neighbors = await self.mpi.get_neighbors()
         self.local_neighbors = []
@@ -315,7 +330,8 @@ class CloudService(Service):
             )
 
     def _perform_operation(self, op: dict):
-        self.logger.info(str(op[vars.ID]) + " performed on node " + self.id)
+        # self.logger.info(str(op[vars.ID]) + " performed on node " + self.id)
+        a = 1
 
     async def _wait_for_req_clock(self, req_clock: dict):
         while not self._check_req_clock(req_clock):

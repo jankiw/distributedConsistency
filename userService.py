@@ -1,9 +1,14 @@
 import asyncio
+import os
 import random
 import uuid
 
+os.environ["RAY_DEDUP_LOGS"] = "0"
+import ray
 from eclypse.remote.service import Service
+from ray.actor import ActorHandle
 
+import coordinator
 import vars
 
 
@@ -13,19 +18,26 @@ class UserService(Service):
     read_clock: dict
     session_guarantees: dict
     session_network_range: str
+    session_id = None
+    coordinator: ActorHandle
 
     def __init__(self, service_id: str):
         super().__init__(service_id, store_step=True)
+
         self.i = 0
 
 
     async def step(self):
         if self.i == 0:
             await self._first_step()
-        self.i += 1
-        await self._send_op(vars.WRITE_OP, "my value")
-        await asyncio.sleep(1)
-        return self.i
+        while True:
+            await self._send_op(vars.WRITE_OP, "my value")
+            await asyncio.sleep(1)
+            self.i += 1
+            if self.i == 10:
+                await self.coordinator.user_finish.remote()
+                break
+        return 1
 
     async def _send_op(self, op_type: str, value: str):
         neighbor: str = random.choice(self.node_neighbors)
@@ -38,15 +50,15 @@ class UserService(Service):
         self.logger.info("sent to " + neighbor + " op " + str(op[vars.ID]))
         is_write: bool = vars.is_write(op)
         if is_write or self.session_guarantees.__contains__(vars.READ_YOUR_WRITES):
-            if self.write_clock.get(self.id) is not None:
-                req_clock[self.id] = self.write_clock.get(self.id)
+            if self.write_clock.get(self.session_id) is not None:
+                req_clock[self.id] = self.write_clock.get(self.session_id)
 
         if (is_write and self.session_guarantees.__contains__(vars.WRITES_FOLLOW_READS)) or (not is_write and self.session_guarantees.__contains__(vars.MONOTONIC_READS)):
             for key in self.read_clock:
                 req_clock[key] = max(vars.coalesce(req_clock.get(key), 0), self.read_clock.get(key))
 
         body: dict = {
-            vars.ID: self.id,
+            vars.ID: self.session_id,
             vars.OPERATION: op,
             vars.NETWORK_RANGE: vars.GLOBAL_RANGE,
             vars.VECTOR_CLOCK: req_clock
@@ -67,7 +79,7 @@ class UserService(Service):
                 break
 
     def _recv_msg(self, msg):
-        self.logger.info("received confirmation")
+        self.logger.info("received confirmation " + str(self.i))
         body: dict = msg[vars.MESSAGE_BODY]
         res: bool = body[vars.RESULT]
         op: dict = body[vars.OPERATION]
@@ -87,6 +99,7 @@ class UserService(Service):
     def _start_session(self):
         self.write_clock = {}
         self.read_clock = {}
+        self.session_id = uuid.uuid4()
         self.session_guarantees = {
             vars.READ_YOUR_WRITES: True,
             vars.WRITES_FOLLOW_READS: True,
@@ -100,7 +113,15 @@ class UserService(Service):
         self.read_clock = {}
         self.session_guarantees = {}
         self.session_network_range = ""
+        self.session_id = None
 
     async def _first_step(self):
+        try:
+            self.coordinator = coordinator.ServiceCoordinator.options(name=vars.COORDINATOR_NAME,
+                                                                      namespace=vars.COORDINATOR_NAMESPACE).remote(
+                user_count=vars.USER_COUNT)
+        except:
+            self.coordinator = ray.get_actor(vars.COORDINATOR_NAME, namespace=vars.COORDINATOR_NAMESPACE)
+
         self.node_neighbors = await self.mpi.get_neighbors()
         self._start_session()

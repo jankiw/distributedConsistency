@@ -1,11 +1,13 @@
-from cmath import inf
-
 from eclypse.graph import Infrastructure, Application
 from eclypse.graph.assets.defaults import cpu, ram, latency, bandwidth, availability, storage, gpu
+from ray.actor import ActorHandle
 
+import coordinator
 from cloudService import CloudService
+from coordinator import ServiceCoordinator
 from fogService import FogService
 from userService import UserService
+import vars
 
 
 class MyInfrastructure:
@@ -45,10 +47,9 @@ class MyInfrastructure:
         self.add_fog_node(1)
         self.add_fog_node(1)
 
-        self.add_user_node()
-        self.add_user_node()
-        self.add_user_node()
-        self.add_user_node()
+        for i in range (vars.USER_COUNT):
+            self.add_user_node()
+
 
 
     def get_infrastructure(self) -> Infrastructure:

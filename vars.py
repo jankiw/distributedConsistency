@@ -33,6 +33,13 @@ MONOTONIC_READS = "mr"
 WRITES_FOLLOW_READS = "wfr"
 READ_YOUR_WRITES = "ryw"
 
+USER_COUNT = 4
+FOG_QUEUE_TIMER = 1
+CLOUD_QUEUE_TIMER = 1
+
+COORDINATOR_NAME = "service_coordinator"
+COORDINATOR_NAMESPACE = "g"
+
 def is_write(op: dict) -> bool:
     if op[TYPE] == WRITE_OP:
         return True

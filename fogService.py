@@ -1,6 +1,13 @@
 import asyncio
 import copy
+import os
 from collections import deque
+
+os.environ["RAY_DEDUP_LOGS"] = "0"
+import ray
+from ray.actor import ActorHandle
+
+import coordinator
 import vars
 
 from eclypse.remote.service import Service
@@ -8,8 +15,6 @@ from multiprocessing import Lock
 
 from rraft import Config, MemStorage, RawNode, ConfState, default_logger, InMemoryRawNode, Ready
 from rraft.rraft import Message
-
-
 
 _raft_node: InMemoryRawNode = None
 _raft_lock = None
@@ -80,6 +85,7 @@ class FogService(Service):
     history: list = None
     queue: deque = None
     op_assocs: dict = None
+    coordinator: ActorHandle
 
 # ======================================================================================================================
 
@@ -90,11 +96,14 @@ class FogService(Service):
     async def step(self):
         if self.i == 0:
             await self._first_step()
+        while True:
+            #self.i += 1
 
-        self.i += 1
-        await self._empty_queue()
-        await asyncio.sleep(1)
-        return self.i
+            await self._empty_queue()
+            await asyncio.sleep(vars.FOG_QUEUE_TIMER)
+            if await self.coordinator.is_end.remote():
+                break
+        return 1
 
     async def _first_step(self):
         self.edge_neighbors = []
@@ -105,6 +114,11 @@ class FogService(Service):
         _set_queue_lock()
         _set_history_lock()
         _set_vector_lock()
+
+        try:
+            self.coordinator = coordinator.ServiceCoordinator.options(name=vars.COORDINATOR_NAME, namespace = vars.COORDINATOR_NAMESPACE).remote(user_count=vars.USER_COUNT)
+        except:
+            self.coordinator = ray.get_actor(vars.COORDINATOR_NAME, namespace = vars.COORDINATOR_NAMESPACE)
 
         node_neighbors = await self.mpi.get_neighbors()
         for neighbor in node_neighbors:
@@ -145,18 +159,16 @@ class FogService(Service):
     async def _run_raft(self):
         while True:
             try:
-                lock = _get_raft_lock()
-                with lock:
-                    raft_node = _get_raft_node()
-                    raft_node.tick()
-                    if raft_node.has_ready():
-                        ready: Ready = raft_node.ready()
+                with _get_raft_lock():
+                    _get_raft_node().tick()
+                    if _get_raft_node().has_ready():
+                        ready: Ready = _get_raft_node().ready()
                         messages = ready.take_messages()
                         messages += ready.persisted_messages()
                         for message in messages:
                             recipients = [_get_string_number(self.id, message.get_to())]
                             await self._send_msg(vars.RAFT_MSG, message.encode(), recipients)
-                        raft_node.advance(ready.make_ref())
+                        _get_raft_node().advance(ready.make_ref())
                 await asyncio.sleep(1)
             except asyncio.CancelledError:
                 break
@@ -192,10 +204,8 @@ class FogService(Service):
             match msg_type:
                 case vars.RAFT_MSG:
                     body = Message.decode(body)
-                    raft_node = _get_raft_node()
-                    lock = _get_raft_lock()
-                    with lock:
-                        raft_node.step(body)
+                    with _get_raft_lock():
+                        _get_raft_node().step(body)
 
                 case vars.USER_TASK:
                     await self._handle_user_task(body)
@@ -277,11 +287,10 @@ class FogService(Service):
 # ======================================================================================================================
 
     def _perform_operation(self, op: dict):
-        # raft_node = _get_raft_node()
-        # lock = _get_raft_lock()
-        # with lock:
-        #     raft_node.propose([], )
-        self.logger.info(str(op[vars.ID]) + " performed on node " + self.id)
+        # with _get_raft_lock():
+        #     _get_raft_node().propose([], )
+        # self.logger.info(str(op[vars.ID]) + " performed on node " + self.id)
+        a = 1
 
     async def _wait_for_req_clock(self, req_clock: dict):
         if not self._check_req_clock(req_clock):
