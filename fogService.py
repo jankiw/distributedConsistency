@@ -169,7 +169,7 @@ class FogService(Service):
                             recipients = [_get_string_number(self.id, message.get_to())]
                             await self._send_msg(vars.RAFT_MSG, message.encode(), recipients)
                         _get_raft_node().advance(ready.make_ref())
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.05)
             except asyncio.CancelledError:
                 break
 
@@ -185,9 +185,9 @@ class FogService(Service):
     async def _send_msg(self, msg_type: int, body, recipients: list):
         msg = {vars.MESSAGE_BODY: body, vars.MESSAGE_TYPE: msg_type}
         # if msg[vars.MESSAGE_TYPE] != vars.RAFT_MSG:
+        #     self.logger.info("a")
         #     self.logger.info(msg)
         #     self.logger.info(recipients)
-
         confirm = self.mpi.send(recipients, msg)
         if asyncio.iscoroutine(confirm):
             await confirm
@@ -230,7 +230,7 @@ class FogService(Service):
             )
             return
 
-        user_id: str = body[vars.ID]
+        session_id: str = body[vars.ID]
         op: dict = body[vars.OPERATION]
         req_clock: dict = body[vars.VECTOR_CLOCK]
 
@@ -240,10 +240,10 @@ class FogService(Service):
         with _get_vector_lock():
             self.op_assocs[op[vars.ID]] = {
                 vars.OPERATION: op,
-                vars.ID: user_id,
+                vars.ID: session_id,
                 vars.VECTOR_CLOCK: copy.deepcopy(self.vector_clock)
             }
-            self.vector_clock[user_id] = vars.coalesce(self.vector_clock.get(user_id), 0) + 1
+            self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
         with _get_history_lock():
             self.history.append(op[vars.ID])
 
@@ -256,7 +256,7 @@ class FogService(Service):
             )
             return
 
-        user_id: str = body[vars.ID]
+        session_id: str = body[vars.ID]
         op: dict = body[vars.OPERATION]
         req_clock: dict = body[vars.VECTOR_CLOCK]
         network_range: str = body[vars.NETWORK_RANGE]
@@ -271,10 +271,10 @@ class FogService(Service):
             with _get_vector_lock():
                 self.op_assocs[op[vars.ID]] = {
                     vars.OPERATION: op,
-                    vars.ID: user_id,
+                    vars.ID: session_id,
                     vars.VECTOR_CLOCK: copy.deepcopy(self.vector_clock)
                 }
-                self.vector_clock[user_id] = vars.coalesce(self.vector_clock.get(user_id), 0) + 1
+                self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
             with _get_history_lock():
                 self.history.append(op[vars.ID])
             with _get_queue_lock():
@@ -282,7 +282,7 @@ class FogService(Service):
         else:
             with _get_vector_lock():
                 response_body[vars.VECTOR_CLOCK] = copy.deepcopy(self.vector_clock)
-        await self._send_msg(vars.TASK_CONFIRM, response_body, [user_id])
+        await self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)])
 
 # ======================================================================================================================
 

@@ -38,17 +38,40 @@ class MyInfrastructure:
         self.fog_node_cloud_parents = []
         self.user_count = 0
 
-        self.add_cloud_node()
-        self.add_cloud_node()
-        self.add_fog_cluster(0)
-        self.add_fog_cluster(0)
-        self.add_fog_cluster(1)
-        self.add_fog_node(1)
-        self.add_fog_node(1)
-        self.add_fog_node(1)
+        local_groups = []
+        # --------------------------------------------------------------------------------------------------------------
+
+        group = [0, 1]
+        full_group = []
+        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 0)))
+        full_group.append(self.add_fog_cluster(0))
+        full_group.append(self.add_fog_cluster(0))
+        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
+        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
+
+        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 1)))
+        full_group.append(self.add_fog_cluster(1))
+        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
+
+        local_groups.append(full_group)
+
+        # --------------------------------------------------------------------------------------------------------------
+
+        group = [2, 3]
+        full_group = []
+        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 2)))
+        full_group.append(self.add_fog_cluster(2))
+        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
+        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
+        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 3)))
+
+        local_groups.append(full_group)
+
+        # --------------------------------------------------------------------------------------------------------------
+
 
         for i in range (vars.USER_COUNT):
-            self.add_user_node()
+            self.add_user_node(local_groups)
 
 
 
@@ -58,25 +81,29 @@ class MyInfrastructure:
     def get_application(self) -> Application:
         return self.application
 
-    def add_fog_cluster(self, cloud_num: int) -> None:
+    def add_fog_cluster(self, cloud_num: int) -> str:
         self.fog_cluster_counts.append(0)
         self.fog_node_cloud_parents.append(cloud_num)
 
-        self.add_fog_node(self.fog_cluster_count)
+        result = self.add_fog_node(self.fog_cluster_count)
 
         self.fog_cluster_count += 1
 
-    def add_cloud_node(self) -> None:
+        return result
+
+    def add_cloud_node(self, local_group_neighbors) -> str:
         cloud_num: int = self.cloud_count
         cloud_name: str = self.get_cloud_node_name(cloud_num)
 
         self.infrastructure.add_node(cloud_name, cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
-        self.application.add_service(CloudService(cloud_name), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+        self.application.add_service(CloudService(cloud_name, local_group_neighbors), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
         for i in range(cloud_num):
             self.add_cloud_edge(cloud_num, i)
         self.cloud_count += 1
 
-    def add_fog_node(self, cluster_num: int) -> None:
+        return cloud_name
+
+    def add_fog_node(self, cluster_num: int) -> str:
         fog_num: int = self.fog_cluster_counts[cluster_num]
         fog_name: str = self.get_fog_node_name(cluster_num, fog_num)
         cloud_num: int = self.fog_node_cloud_parents[cluster_num]
@@ -89,12 +116,14 @@ class MyInfrastructure:
 
         self.fog_cluster_counts[cluster_num] += 1
 
-    def add_user_node(self) -> None:
+        return fog_name
+
+    def add_user_node(self, local_groups) -> str:
         user_num: int = self.user_count
         user_name: str = self.get_user_node_name(user_num)
 
         self.infrastructure.add_node(user_name, cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
-        self.application.add_service(UserService(user_name), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+        self.application.add_service(UserService(user_name, local_groups), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
 
         for i in range(self.cloud_count):
             self.add_user_edge(user_num, self.get_cloud_node_name(i))
@@ -102,6 +131,8 @@ class MyInfrastructure:
             for j in range(self.fog_cluster_counts[i]):
                 self.add_user_edge(user_num, self.get_fog_node_name(i, j))
         self.user_count += 1
+
+        return user_name
 
     def add_fog_edge(self, cluster_num: int, fog_num_1: int, fog_num_2: int) -> None:
         self.infrastructure.add_edge(
@@ -170,4 +201,12 @@ class MyInfrastructure:
     @staticmethod
     def get_user_node_name(num: int) -> str:
         return "user-" + str(num)
+
+    @staticmethod
+    def get_local_neighbours(list, id):
+        result = []
+        for i in list:
+            if i == id:
+                continue
+            result.append(MyInfrastructure.get_cloud_node_name(i))
 

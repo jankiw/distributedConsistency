@@ -76,9 +76,10 @@ class CloudService(Service):
 
 #======================================================================================================================
 
-    def __init__(self, service_id: str):
+    def __init__(self, service_id: str, local_neighbors):
         super().__init__(service_id, store_step=True)
         self.i = 0
+        self.local_neighbors = local_neighbors
 
     async def step(self):
         if self.i == 0:
@@ -111,7 +112,6 @@ class CloudService(Service):
             self.coordinator = ray.get_actor(vars.COORDINATOR_NAME, namespace=vars.COORDINATOR_NAMESPACE)
 
         node_neighbors = await self.mpi.get_neighbors()
-        self.local_neighbors = []
         self.global_neighbors = []
         for neighbor in node_neighbors:
             if "cloud" in neighbor:
@@ -183,8 +183,8 @@ class CloudService(Service):
                         if req_clock.get(key) > vars.coalesce(self.fog_clocks[fog_id].get(key), 0):
                             for op_id in self.history:
                                 timestamp_clock = self.op_assocs[op_id][vars.VECTOR_CLOCK]
-                                user_id = self.op_assocs[op_id][vars.ID]
-                                if user_id == key and req_clock.get(key) > coalesce(timestamp_clock.get(key), 0) >= coalesce(self.fog_clocks[fog_id].get(key), 0):
+                                session_id = self.op_assocs[op_id][vars.ID]
+                                if session_id == key and req_clock.get(key) > coalesce(timestamp_clock.get(key), 0) >= coalesce(self.fog_clocks[fog_id].get(key), 0):
                                     queue.append(op_id)
                             self.fog_clocks[fog_id][key] = req_clock[key]
             if len(queue) <= 0:
@@ -233,7 +233,7 @@ class CloudService(Service):
 
     async def _handle_cloud_task(self, body: dict):
 
-        user_id: str = body[vars.ID]
+        session_id: str = body[vars.ID]
         op: dict = body[vars.OPERATION]
         req_clock: dict = body[vars.VECTOR_CLOCK]
 
@@ -242,17 +242,17 @@ class CloudService(Service):
         with _get_vector_lock():
             self.op_assocs[op[vars.ID]] = {
                 vars.OPERATION: op,
-                vars.ID: user_id,
+                vars.ID: session_id,
                 vars.VECTOR_CLOCK: copy.deepcopy(self.vector_clock)
             }
-            self.vector_clock[user_id] = vars.coalesce(self.vector_clock.get(user_id), 0) + 1
+            self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
         with _get_history_lock():
             self.history.append(op[vars.ID])
 
     async def _handle_fog_task(self, body: dict):
 
         fog_id: str = body[vars.FOG_ID]
-        user_id: str = body[vars.ID]
+        session_id: str = body[vars.ID]
         op: dict = body[vars.OPERATION]
         req_clock: dict = body[vars.VECTOR_CLOCK]
         network_range: str = body[vars.NETWORK_RANGE]
@@ -266,19 +266,19 @@ class CloudService(Service):
         with _get_vector_lock():
             self.op_assocs[op[vars.ID]] = {
                 vars.OPERATION: op,
-                vars.ID: user_id,
+                vars.ID: session_id,
                 vars.VECTOR_CLOCK: copy.deepcopy(self.vector_clock)
             }
-            self.vector_clock[user_id] = vars.coalesce(self.vector_clock.get(user_id), 0) + 1
+            self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
         with _get_fog_lock():
-            self.fog_clocks[fog_id][user_id] = vars.coalesce(self.fog_clocks[fog_id].get(user_id), 0) + 1
+            self.fog_clocks[fog_id][session_id] = vars.coalesce(self.fog_clocks[fog_id].get(session_id), 0) + 1
 
         with _get_history_lock():
             self.history.append(op[vars.ID])
 
     async def _handle_user_task(self, body: dict):
 
-        user_id: str = body[vars.ID]
+        session_id: str = body[vars.ID]
         op: dict = body[vars.OPERATION]
         req_clock: dict = body[vars.VECTOR_CLOCK]
         network_range: str = body[vars.NETWORK_RANGE]
@@ -293,10 +293,10 @@ class CloudService(Service):
             with _get_vector_lock():
                 self.op_assocs[op[vars.ID]] = {
                     vars.OPERATION: op,
-                    vars.ID: user_id,
+                    vars.ID: session_id,
                     vars.VECTOR_CLOCK: copy.deepcopy(self.vector_clock)
                 }
-                self.vector_clock[user_id] = vars.coalesce(self.vector_clock.get(user_id), 0) + 1
+                self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
             with _get_history_lock():
                 self.history.append(op[vars.ID])
             with _get_queue_lock():
@@ -304,7 +304,7 @@ class CloudService(Service):
         else:
             with _get_vector_lock():
                 response_body[vars.VECTOR_CLOCK] = copy.deepcopy(self.vector_clock)
-        await self._send_msg(vars.TASK_CONFIRM, response_body, [user_id])
+        await self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)])
 
 # ======================================================================================================================
 

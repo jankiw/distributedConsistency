@@ -50,3 +50,6 @@ def coalesce(var, value):
         return value
 
     return var
+
+def get_addr_from_session_id(op_id) -> str:
+    return op_id.split('_')[0]
