@@ -59,7 +59,7 @@ class UserService(Service):
             neighbor = self.rng.choice(self.local_groups[self.current_group])
         req_clock: dict = {}
         op: dict = {
-            vars.ID: uuid.uuid1(),
+            vars.ID: self.id + "_" + self.i,
             vars.TYPE: op_type,
             vars.VALUE: value
         }
@@ -115,7 +115,7 @@ class UserService(Service):
     def _start_session(self):
         self.write_clock = {}
         self.read_clock = {}
-        self.session_id = self.id + '_' + uuid.uuid4().__str__()
+        self.session_id = self.id + "_" + self.i
         self.session_guarantees = {
             vars.READ_YOUR_WRITES: True,
             vars.WRITES_FOLLOW_READS: True,
