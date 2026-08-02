@@ -331,7 +331,7 @@ class CloudService(Service):
 
     def _perform_operation(self, op: dict):
         # self.logger.info(str(op[vars.ID]) + " performed on node " + self.id)
-        a = 1
+        pass
 
     async def _wait_for_req_clock(self, req_clock: dict):
         while not self._check_req_clock(req_clock):
