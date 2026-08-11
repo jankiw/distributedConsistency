@@ -126,10 +126,11 @@ class MyInfrastructure:
         self.application.add_service(UserService(user_name, local_groups), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
 
         for i in range(self.cloud_count):
-            self.add_user_edge(user_num, self.get_cloud_node_name(i))
+            self.add_user_cloud_edge(user_num, self.get_cloud_node_name(i))
+
         for i in range(self.fog_cluster_count):
             for j in range(self.fog_cluster_counts[i]):
-                self.add_user_edge(user_num, self.get_fog_node_name(i, j))
+                self.add_user_fog_edge(user_num, self.get_fog_node_name(i, j))
         self.user_count += 1
 
         return user_name
@@ -137,13 +138,13 @@ class MyInfrastructure:
     def add_fog_edge(self, cluster_num: int, fog_num_1: int, fog_num_2: int) -> None:
         self.infrastructure.add_edge(
             self.get_fog_node_name(cluster_num, fog_num_1), self.get_fog_node_name(cluster_num, fog_num_2),
-            latency=10.0,
+            latency=vars.FOG_FOG_LATENCY,
             bandwidth=100.0,
             symmetric=True
         )
         self.application.add_edge(
             self.get_fog_node_name(cluster_num, fog_num_1), self.get_fog_node_name(cluster_num, fog_num_2),
-            latency=15.0,
+            latency=vars.FOG_FOG_LATENCY,
             bandwidth=10.0,
             symmetric=True
         )
@@ -151,13 +152,13 @@ class MyInfrastructure:
     def add_mixed_edge(self, cluster_num: int, fog_num: int, cloud_num: int) -> None:
         self.infrastructure.add_edge(
             self.get_fog_node_name(cluster_num, fog_num), self.get_cloud_node_name(cloud_num),
-            latency=10.0,
+            latency=vars.FOG_CLOUD_LATENCY,
             bandwidth=100.0,
             symmetric=True
         )
         self.application.add_edge(
             self.get_fog_node_name(cluster_num, fog_num), self.get_cloud_node_name(cloud_num),
-            latency=15.0,
+            latency=vars.FOG_CLOUD_LATENCY,
             bandwidth=10.0,
             symmetric=True
         )
@@ -165,27 +166,41 @@ class MyInfrastructure:
     def add_cloud_edge(self, cloud_num_1: int, cloud_num_2: int) -> None:
         self.infrastructure.add_edge(
             self.get_cloud_node_name(cloud_num_1), self.get_cloud_node_name(cloud_num_2),
-            latency=10.0,
+            latency=vars.CLOUD_CLOUD_LATENCY,
             bandwidth=100.0,
             symmetric=True
         )
         self.application.add_edge(
             self.get_cloud_node_name(cloud_num_1), self.get_cloud_node_name(cloud_num_2),
-            latency=15.0,
+            latency=vars.CLOUD_CLOUD_LATENCY,
             bandwidth=10.0,
             symmetric=True
         )
 
-    def add_user_edge(self,user_id: int, other_node: str) -> None:
+    def add_user_fog_edge(self,user_id: int, other_node: str) -> None:
         self.infrastructure.add_edge(
             self.get_user_node_name(user_id), other_node,
-            latency=10.0,
+            latency=vars.USER_FOG_LATENCY,
             bandwidth=100.0,
             symmetric=True
         )
         self.application.add_edge(
             self.get_user_node_name(user_id), other_node,
-            latency=15.0,
+            latency=vars.USER_FOG_LATENCY,
+            bandwidth=10.0,
+            symmetric=True
+        )
+
+    def add_user_cloud_edge(self,user_id: int, other_node: str) -> None:
+        self.infrastructure.add_edge(
+            self.get_user_node_name(user_id), other_node,
+            latency=vars.USER_CLOUD_LATENCY,
+            bandwidth=100.0,
+            symmetric=True
+        )
+        self.application.add_edge(
+            self.get_user_node_name(user_id), other_node,
+            latency=vars.USER_CLOUD_LATENCY,
             bandwidth=10.0,
             symmetric=True
         )

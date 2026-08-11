@@ -335,7 +335,7 @@ class CloudService(Service):
 
     async def _wait_for_req_clock(self, req_clock: dict):
         while not self._check_req_clock(req_clock):
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(vars.CLOCK_WAIT_TIME)
 
     def _check_req_clock(self, req_clock: dict) -> bool:
         with _get_vector_lock():

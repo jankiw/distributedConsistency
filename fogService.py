@@ -201,7 +201,7 @@ class FogService(Service):
                         for entry in committed_entries:
                             if entry.get_entry_type() == EntryType.EntryNormal and entry.get_data():
                                 data = json.loads(entry.get_data().decode())
-                                await self._raft_handle_data(data)
+                                await self._raft_handle_user_task(data)
 
                         _get_raft_node().advance(ready.make_ref())
 
@@ -285,26 +285,35 @@ class FogService(Service):
             self.history.append(op[vars.ID])
 
     async def _handle_user_task(self, body: dict):
-        while True:
-            with _get_raft_lock():
-                leader_id = _get_raft_node().get_raft().get_leader_id()
-                if leader_id != 0:
-                    leader_node = _get_string_number(self.id, leader_id)
+        op: dict = body[vars.OPERATION]
+        if vars.is_write(op):
+            while True:
+                with _get_raft_lock():
+                    leader_id = _get_raft_node().get_raft().get_leader_id()
+                    if leader_id != 0:
+                        leader_node = _get_string_number(self.id, leader_id)
 
-                    if leader_node != self.id:
-                        await self._send_msg(
-                            vars.USER_TASK,
-                            body,
-                            [leader_node]
-                        )
+                        if leader_node != self.id:
+                            await self._send_msg(
+                                vars.USER_TASK,
+                                body,
+                                [leader_node]
+                            )
+                            return
+                        # self.logger.info(_get_raft_node().get_raft().get_state())
+                        msg: bytes = json.dumps(body).encode()
+                        _get_raft_node().propose([], msg)
                         return
-                    #self.logger.info(_get_raft_node().get_raft().get_state())
-                    msg: bytes = json.dumps(body).encode()
-                    _get_raft_node().propose([], msg)
-                    return
-            await asyncio.sleep(0.05)
 
-    async def _raft_handle_data(self, data):
+                await asyncio.sleep(0.05)
+
+        else:
+            with _get_raft_lock():
+                await self._raft_handle_user_task(body)
+
+
+    #in both places it is used with raft lock already in use
+    async def _raft_handle_user_task(self, data):
         session_id: str = data[vars.ID]
         op: dict = data[vars.OPERATION]
         req_clock: dict = data[vars.VECTOR_CLOCK]
@@ -331,7 +340,8 @@ class FogService(Service):
         else:
             with _get_vector_lock():
                 response_body[vars.VECTOR_CLOCK] = copy.deepcopy(self.vector_clock)
-        if self.raft_leader != self.id:
+
+        if (not vars.is_write(op)) or (self.raft_leader == self.id):
             await self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)])
 
 # ======================================================================================================================
@@ -351,7 +361,7 @@ class FogService(Service):
                 [self.cloud_node]
             )
             while not self._check_req_clock(req_clock):
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(vars.CLOCK_WAIT_TIME)
 
     def _check_req_clock(self, req_clock: dict) -> bool:
         with _get_vector_lock():
