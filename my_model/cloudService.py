@@ -2,13 +2,12 @@ import asyncio
 import copy
 import os
 
+from my_model import coordinator, fogService
+
 os.environ["RAY_DEDUP_LOGS"] = "0"
 import ray
-from pandas.io.formats import console
 from ray.actor import ActorHandle
 
-import coordinator
-import fogService
 
 from eclypse.remote.service import Service
 from multiprocessing import Lock

@@ -2,21 +2,20 @@ import asyncio
 import copy
 import json
 import os
-import pickle
-import struct
 from collections import deque
+
+from my_model import coordinator
 
 os.environ["RAY_DEDUP_LOGS"] = "0"
 import ray
 from ray.actor import ActorHandle
 
-import coordinator
 import vars
 
 from eclypse.remote.service import Service
 from multiprocessing import Lock
 
-from rraft import Config, MemStorage, RawNode, ConfState, default_logger, InMemoryRawNode, Ready, EntryType
+from rraft import Config, MemStorage, ConfState, default_logger, InMemoryRawNode, Ready, EntryType
 from rraft.rraft import Message
 
 _raft_node: InMemoryRawNode

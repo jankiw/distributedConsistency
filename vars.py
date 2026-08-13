@@ -47,6 +47,8 @@ FOG_FOG_LATENCY = 100.0
 FOG_CLOUD_LATENCY = 1000.0
 CLOUD_CLOUD_LATENCY = 1000.0
 
+MY_MODEL: str = "my_model"
+
 def is_write(op: dict) -> bool:
     if op[TYPE] == WRITE_OP:
         return True

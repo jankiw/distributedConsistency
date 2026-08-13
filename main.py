@@ -3,7 +3,7 @@ import asyncio
 from eclypse.simulation import Simulation
 
 from SimulationConfig import get_config
-from coordinator import ServiceCoordinator
+from my_model.coordinator import ServiceCoordinator
 from infrastructure import MyInfrastructure
 import vars
 import os
@@ -28,24 +28,28 @@ async def wait_for_end():
             return
         await asyncio.sleep(0.1)
 
-myInfrastructure: MyInfrastructure = MyInfrastructure()
-myInfrastructure.generate_new_infrastructure()
 
-simulation = Simulation(myInfrastructure.get_infrastructure(), simulation_config=get_config())
-simulation.register(myInfrastructure.get_application())
+def run_simulation(model: str) -> None:
+    my_infrastructure: MyInfrastructure = MyInfrastructure()
+    my_infrastructure.generate_new_infrastructure(model)
 
-simulation.start()
-simulation.step()
+    simulation = Simulation(my_infrastructure.get_infrastructure(), simulation_config=get_config())
+    simulation.register(my_infrastructure.get_application())
 
-loop = asyncio.get_event_loop()
-forecast = loop.run_until_complete(wait_for_end())
-loop.close()
+    simulation.start()
+    simulation.step()
 
-simulation.stop()
+    loop = asyncio.get_event_loop()
+    forecast = loop.run_until_complete(wait_for_end())
+    loop.close()
+
+    simulation.stop()
+
+    application_frame = simulation.report.application()
+    service_frame = simulation.report.service()
+
+    print(application_frame.head())
+    print(service_frame.head())
 
 
-application_frame = simulation.report.application()
-service_frame = simulation.report.service()
-
-print(application_frame.head())
-print(service_frame.head())
+run_simulation(vars.MY_MODEL)

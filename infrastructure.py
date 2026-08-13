@@ -1,12 +1,9 @@
 from eclypse.graph import Infrastructure, Application
 from eclypse.graph.assets.defaults import cpu, ram, latency, bandwidth, availability, storage, gpu
-from ray.actor import ActorHandle
 
-import coordinator
-from cloudService import CloudService
-from coordinator import ServiceCoordinator
-from fogService import FogService
-from userService import UserService
+from my_model.cloudService import CloudService
+from my_model.fogService import FogService
+from my_model.userService import UserService
 import vars
 
 
@@ -18,8 +15,11 @@ class MyInfrastructure:
     fog_cluster_counts: list
     fog_node_cloud_parents: list
     user_count: int
+    model_type: str
 
-    def generate_new_infrastructure(self) -> None:
+    def generate_new_infrastructure(self, model_type: str) -> None:
+        self.model_type = model_type
+
         self.infrastructure = Infrastructure(
             infrastructure_id="my-infra",
             node_assets={"cpu": cpu(), "ram": ram(), "availability": availability(), "storage": storage(), "gpu": gpu()},
@@ -96,7 +96,11 @@ class MyInfrastructure:
         cloud_name: str = self.get_cloud_node_name(cloud_num)
 
         self.infrastructure.add_node(cloud_name, cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
-        self.application.add_service(CloudService(cloud_name, local_group_neighbors), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+
+        match self.model_type:
+            case vars.MY_MODEL:
+                self.application.add_service(CloudService(cloud_name, local_group_neighbors), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+
         for i in range(cloud_num):
             self.add_cloud_edge(cloud_num, i)
         self.cloud_count += 1
@@ -107,9 +111,12 @@ class MyInfrastructure:
         fog_num: int = self.fog_cluster_counts[cluster_num]
         fog_name: str = self.get_fog_node_name(cluster_num, fog_num)
         cloud_num: int = self.fog_node_cloud_parents[cluster_num]
-
         self.infrastructure.add_node(fog_name, cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
-        self.application.add_service(FogService(fog_name), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+
+        match self.model_type:
+            case vars.MY_MODEL:
+                self.application.add_service(FogService(fog_name), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+
         for i in range(fog_num):
             self.add_fog_edge(cluster_num, fog_num, i)
         self.add_mixed_edge(cluster_num, fog_num, cloud_num)
@@ -123,7 +130,10 @@ class MyInfrastructure:
         user_name: str = self.get_user_node_name(user_num)
 
         self.infrastructure.add_node(user_name, cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
-        self.application.add_service(UserService(user_name, local_groups), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+
+        match self.model_type:
+            case vars.MY_MODEL:
+                self.application.add_service(UserService(user_name, local_groups), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
 
         for i in range(self.cloud_count):
             self.add_user_cloud_edge(user_num, self.get_cloud_node_name(i))
@@ -218,10 +228,10 @@ class MyInfrastructure:
         return "user-" + str(num)
 
     @staticmethod
-    def get_local_neighbours(list, id):
+    def get_local_neighbours(neighbour_list, own_id):
         result = []
-        for i in list:
-            if i == id:
+        for neighbour in neighbour_list:
+            if neighbour == own_id:
                 continue
-            result.append(MyInfrastructure.get_cloud_node_name(i))
+            result.append(MyInfrastructure.get_cloud_node_name(neighbour))
 

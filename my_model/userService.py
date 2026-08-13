@@ -1,6 +1,5 @@
 import asyncio
 import os
-import uuid
 import numpy as np
 
 os.environ["RAY_DEDUP_LOGS"] = "0"
@@ -8,7 +7,6 @@ import ray
 from eclypse.remote.service import Service
 from ray.actor import ActorHandle
 
-import coordinator
 import vars
 
 GLOBAL_GROUP: int = -1

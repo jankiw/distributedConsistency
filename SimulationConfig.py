@@ -1,5 +1,3 @@
-import logging
-
 from eclypse.simulation import SimulationConfig
 
 from strategy import MyStrategy
