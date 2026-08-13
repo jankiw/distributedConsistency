@@ -2,6 +2,8 @@ import asyncio
 import os
 import numpy as np
 
+from my_model import coordinator
+
 os.environ["RAY_DEDUP_LOGS"] = "0"
 import ray
 from eclypse.remote.service import Service
@@ -38,7 +40,7 @@ class UserService(Service):
             await self._first_step()
         while True:
             await self._send_op(vars.WRITE_OP, "my value")
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.05)
             self.i += 1
             if self.i in [5,10,15]:
                 self._end_session()
@@ -46,7 +48,9 @@ class UserService(Service):
 
             if self.i >= 20:
                 await self.coordinator.user_finish.remote()
-                break
+                while not await self.coordinator.is_end.remote():
+                    await asyncio.sleep(0.05)
+                return 1
         return 1
 
     async def _send_op(self, op_type: str, value: str):

@@ -45,7 +45,9 @@ class MyInfrastructure:
         full_group = []
         full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 0)))
         full_group.append(self.add_fog_cluster(0))
+        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
         full_group.append(self.add_fog_cluster(0))
+        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
         full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
         full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
 

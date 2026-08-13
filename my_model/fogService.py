@@ -177,26 +177,27 @@ class FogService(Service):
 
                         ready: Ready = _get_raft_node().ready()
 
-                        hardstate = ready.hs()
-                        if hardstate:
-                            _get_raft_storage().wl().set_hardstate(hardstate)
+                        entries = ready.take_entries()
 
-                        entries = ready.entries()
                         if len(entries) > 0:
                             #self.logger.info(entries)
                             _get_raft_storage().wl().append(entries)
+
+                        hardstate = ready.hs()
+                        if hardstate:
+                            _get_raft_storage().wl().set_hardstate(hardstate)
 
                         snapshot = ready.snapshot()
                         if snapshot:
                             _get_raft_storage().wl().apply_snapshot(snapshot)
 
                         messages = ready.take_messages()
-                        messages += ready.persisted_messages()
+                        messages += ready.take_persisted_messages()
                         for message in messages:
                             recipients = [_get_string_number(self.id, message.get_to())]
                             await self._send_msg(vars.RAFT_MSG, message.encode(), recipients)
 
-                        committed_entries = ready.committed_entries()
+                        committed_entries = ready.take_committed_entries()
                         for entry in committed_entries:
                             if entry.get_entry_type() == EntryType.EntryNormal and entry.get_data():
                                 data = json.loads(entry.get_data().decode())
