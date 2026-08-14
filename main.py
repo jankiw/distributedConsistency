@@ -25,6 +25,7 @@ async def wait_for_end():
 
     while True:
         if await my_coordinator.is_end.remote():
+            await asyncio.sleep(2 * vars.SIMULATION_END_CLEANUP_TIME)
             return
         await asyncio.sleep(0.1)
 

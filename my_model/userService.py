@@ -39,17 +39,19 @@ class UserService(Service):
         if self.i == 0:
             await self._first_step()
         while True:
-            await self._send_op(vars.WRITE_OP, "my value")
             await asyncio.sleep(0.05)
             self.i += 1
             if self.i in [5,10,15]:
                 self._end_session()
                 self._start_session()
 
+            await self._send_op(vars.WRITE_OP, "my value")
+
             if self.i >= 20:
                 await self.coordinator.user_finish.remote()
                 while not await self.coordinator.is_end.remote():
                     await asyncio.sleep(0.05)
+                await asyncio.sleep(2 * vars.SIMULATION_END_CLEANUP_TIME)
                 return 1
         return 1
 
@@ -87,14 +89,8 @@ class UserService(Service):
         if asyncio.iscoroutine(confirm):
             await confirm
 
-        while True:
-            try:
-                msg = await self.mpi.recv()
-                if msg:
-                    self._recv_msg(msg)
-                    break
-            except asyncio.CancelledError:
-                break
+        msg = await self.mpi.recv()
+        self._recv_msg(msg)
 
     def _recv_msg(self, msg):
         self.logger.info("received confirmation " + str(self.i))

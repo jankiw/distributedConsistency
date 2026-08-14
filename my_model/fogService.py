@@ -2,6 +2,7 @@ import asyncio
 import copy
 import json
 import os
+from asyncio import Task
 from collections import deque
 
 from my_model import coordinator
@@ -113,6 +114,11 @@ class FogService(Service):
             await self._empty_queue()
             await asyncio.sleep(vars.FOG_QUEUE_TIMER)
             if await self.coordinator.is_end.remote():
+                await asyncio.sleep(vars.SIMULATION_END_CLEANUP_TIME)
+                tasks = asyncio.all_tasks()
+                for task in tasks:
+                    task.cancel()
+                await asyncio.sleep(vars.SIMULATION_END_CLEANUP_TIME)
                 break
         return 1
 
