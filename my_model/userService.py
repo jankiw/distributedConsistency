@@ -115,10 +115,10 @@ class UserService(Service):
         self.read_clock = {}
         self.session_id = self.id + "_" + str(self.i)
         self.session_guarantees = {
-            vars.READ_YOUR_WRITES: True,
-            vars.WRITES_FOLLOW_READS: True,
-            vars.MONOTONIC_READS: True,
-            vars.MONOTONIC_WRITES: True
+            vars.READ_YOUR_WRITES: self.rng.choice([True, False]),
+            vars.WRITES_FOLLOW_READS: self.rng.choice([True, False]),
+            vars.MONOTONIC_READS: self.rng.choice([True, False]),
+            vars.MONOTONIC_WRITES: self.rng.choice([True, False])
         }
         self.session_network_range = self.rng.choice([vars.GLOBAL_RANGE, vars.LOCAL_RANGE])
         if self.session_network_range == vars.GLOBAL_RANGE:

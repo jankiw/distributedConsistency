@@ -33,7 +33,7 @@ MONOTONIC_READS = "mr"
 WRITES_FOLLOW_READS = "wfr"
 READ_YOUR_WRITES = "ryw"
 
-USER_COUNT = 4
+USER_COUNT = 6
 FOG_QUEUE_TIMER = 1
 CLOUD_QUEUE_TIMER = 1
 
@@ -50,6 +50,7 @@ CLOUD_CLOUD_LATENCY = 1000.0
 SIMULATION_END_CLEANUP_TIME = 7
 
 MY_MODEL: str = "my_model"
+INFRASTRUCTURE_1: int = 0
 
 def is_write(op: dict) -> bool:
     if op[TYPE] == WRITE_OP:

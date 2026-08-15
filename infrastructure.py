@@ -1,3 +1,5 @@
+from math import sqrt, ceil
+
 from eclypse.graph import Infrastructure, Application
 from eclypse.graph.assets.defaults import cpu, ram, latency, bandwidth, availability, storage, gpu
 
@@ -19,7 +21,7 @@ class MyInfrastructure:
     local_groups: list
     local_group_cloud_ids: list
 
-    def generate_new_infrastructure(self, model_type: str) -> None:
+    def generate_new_infrastructure(self, model_type: str, infrastructure_type: int) -> None:
         self.model_type = model_type
 
         self.infrastructure = Infrastructure(
@@ -42,51 +44,75 @@ class MyInfrastructure:
 
         self.local_groups = []
         self.local_group_cloud_ids = []
-        # --------------------------------------------------------------------------------------------------------------
 
-        group = [0, 1]
-        full_group = []
-        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 0)))
-        full_group.append(self.add_fog_cluster(0))
-        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
-        full_group.append(self.add_fog_cluster(0))
-        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
-        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
-        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
+        match infrastructure_type:
+            case vars.INFRASTRUCTURE_1:
+                self.create_infrastructure_1()
 
-        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 1)))
-        full_group.append(self.add_fog_cluster(1))
-        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
 
-        self.local_groups.append(full_group)
-        self.local_group_cloud_ids.append(group)
+    def create_infrastructure_1(self):
 
-        # --------------------------------------------------------------------------------------------------------------
+        self.create_region([
+            [2, 4],
+            [2]
+        ])
+        self.create_region([
+            [3],
+            []
+        ])
+        self.create_region([
+            [],
+            [6]
+        ])
+        self.create_region([
+            [3],
+            [2]
+        ])
 
-        group = [2, 3]
-        full_group = []
-        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 2)))
-        full_group.append(self.add_fog_cluster(2))
-        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
-        full_group.append(self.add_fog_node(self.fog_cluster_count - 1))
-        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, 3)))
+        self.create_region_adjacency()
 
-        self.local_groups.append(full_group)
-        self.local_group_cloud_ids.append(group)
-
-        # --------------------------------------------------------------------------------------------------------------
-
-        group_adjacency = [
-            [1,2],
-            [2,1]
-        ]
-
-        self.add_cloud_edges(group_adjacency)
-
-        for i in range (vars.USER_COUNT):
+        for i in range(vars.USER_COUNT):
             self.add_user_node()
 
 
+
+    def create_region_adjacency(self):
+        region_adjacency = []
+
+        for i in range(len(self.local_group_cloud_ids)):
+            region_adjacency.append([])
+            for j in range(len(self.local_group_cloud_ids)):
+                diff = abs(j - i)
+                diff = min(diff, len(self.local_group_cloud_ids) - diff)
+                diff = ceil(sqrt(diff))
+                if diff == 0:
+                    diff = 1
+                region_adjacency[i].append(diff)
+
+        print(region_adjacency)
+        self.add_cloud_edges(region_adjacency)
+
+    def create_region(self, cluster_numbers):
+        group = []
+        start_cloud_num: int = self.cloud_count
+        for i in cluster_numbers:
+            group.append(start_cloud_num)
+            start_cloud_num += 1
+
+        full_group = []
+
+        for i in cluster_numbers:
+            self.create_cloud_with_clusters(i, full_group, group)
+
+        self.local_groups.append(full_group)
+        self.local_group_cloud_ids.append(group)
+
+    def create_cloud_with_clusters(self, cluster_numbers: list, full_group, group):
+        full_group.append(self.add_cloud_node(self.get_local_neighbours(group, self.cloud_count)))
+        for i in cluster_numbers:
+            full_group.append(self.add_fog_cluster())
+            for j in range(i - 1):
+                full_group.append(self.add_fog_node())
 
     def get_infrastructure(self) -> Infrastructure:
         return self.infrastructure
@@ -94,19 +120,19 @@ class MyInfrastructure:
     def get_application(self) -> Application:
         return self.application
 
-    def add_fog_cluster(self, cloud_num: int) -> str:
+    def add_fog_cluster(self) -> str:
+        cloud_num = self.cloud_count - 1
         self.fog_cluster_counts.append(0)
         self.fog_node_cloud_parents.append(cloud_num)
 
-        result = self.add_fog_node(self.fog_cluster_count)
-
         self.fog_cluster_count += 1
+
+        result = self.add_fog_node()
 
         return result
 
     def add_cloud_node(self, local_group_neighbors) -> str:
-        cloud_num: int = self.cloud_count
-        cloud_name: str = self.get_cloud_node_name(cloud_num)
+        cloud_name: str = self.get_cloud_node_name(self.cloud_count)
 
         self.infrastructure.add_node(cloud_name, cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
 
@@ -120,7 +146,8 @@ class MyInfrastructure:
 
         return cloud_name
 
-    def add_fog_node(self, cluster_num: int) -> str:
+    def add_fog_node(self) -> str:
+        cluster_num: int = self.fog_cluster_count - 1
         fog_num: int = self.fog_cluster_counts[cluster_num]
         fog_name: str = self.get_fog_node_name(cluster_num, fog_num)
         cloud_num: int = self.fog_node_cloud_parents[cluster_num]
@@ -257,10 +284,11 @@ class MyInfrastructure:
         return "user-" + str(num)
 
     @staticmethod
-    def get_local_neighbours(neighbour_list, own_id):
+    def get_local_neighbours(neighbour_list, own_id) -> list:
         result = []
         for neighbour in neighbour_list:
             if neighbour == own_id:
                 continue
             result.append(MyInfrastructure.get_cloud_node_name(neighbour))
+        return result
 

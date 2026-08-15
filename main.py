@@ -30,9 +30,9 @@ async def wait_for_end():
         await asyncio.sleep(0.1)
 
 
-def run_simulation(model: str) -> None:
+def run_simulation(model: str, infrastructure) -> None:
     my_infrastructure: MyInfrastructure = MyInfrastructure()
-    my_infrastructure.generate_new_infrastructure(model)
+    my_infrastructure.generate_new_infrastructure(model, infrastructure)
 
     simulation = Simulation(my_infrastructure.get_infrastructure(), simulation_config=get_config())
     simulation.register(my_infrastructure.get_application())
@@ -53,4 +53,4 @@ def run_simulation(model: str) -> None:
     print(service_frame.head())
 
 
-run_simulation(vars.MY_MODEL)
+run_simulation(vars.MY_MODEL, vars.INFRASTRUCTURE_1)
