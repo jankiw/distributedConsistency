@@ -60,7 +60,8 @@ class UserService(Service):
                 while not await self.coordinator.is_end.remote():
                     await asyncio.sleep(0.05)
                 await asyncio.sleep(2 * vars.SIMULATION_END_CLEANUP_TIME)
-                return {"total_time": self.my_total_time, "op_count": self.op_count, "avg_time": self.my_total_time / self.op_count}
+                self.coordinator.post_data.remote({"total_time": self.total_time, "op_count": self.op_count, "avg_time": self.total_time / self.op_count})
+                return 1
         return 1
 
     async def _send_op(self, op_type: str, value: str):

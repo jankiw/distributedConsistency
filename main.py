@@ -26,8 +26,9 @@ async def wait_for_end():
     while True:
         if await my_coordinator.is_end.remote():
             await asyncio.sleep(2 * vars.SIMULATION_END_CLEANUP_TIME)
-            return
+            return my_coordinator
         await asyncio.sleep(0.1)
+
 
 
 def run_simulation(model: str, infrastructure) -> None:
@@ -41,15 +42,18 @@ def run_simulation(model: str, infrastructure) -> None:
     simulation.step()
 
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(wait_for_end())
+    coordinator: ActorHandle = loop.run_until_complete(wait_for_end())
 
     simulation.stop()
 
-    application_frame = simulation.report.application()
-    service_frame = simulation.report.service()
+    result = loop.run_until_complete(coordinator.get_data.remote())
+    print(result)
 
-    print(application_frame)
-    print(service_frame.head())
+    # application_frame = simulation.report.application()
+    # service_frame = simulation.report.service()
+    #
+    # print(application_frame.head())
+    # print(service_frame.head())
 
 
 run_simulation(vars.MY_MODEL, vars.INFRASTRUCTURE_1)

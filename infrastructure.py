@@ -147,7 +147,7 @@ class MyInfrastructure:
 
         match self.model_type:
             case vars.MY_MODEL:
-                self.application.add_service(CloudService(cloud_name, local_group_neighbors), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+                self.application.add_service(CloudService(cloud_name, local_group_neighbors), cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
 
         # for i in range(cloud_num):
         #     self.add_cloud_edge(cloud_num, i)
@@ -164,7 +164,7 @@ class MyInfrastructure:
 
         match self.model_type:
             case vars.MY_MODEL:
-                self.application.add_service(FogService(fog_name), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+                self.application.add_service(FogService(fog_name), cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
 
         for i in range(fog_num):
             self.add_fog_edge(cluster_num, fog_num, i)
@@ -182,7 +182,7 @@ class MyInfrastructure:
 
         match self.model_type:
             case vars.MY_MODEL:
-                self.application.add_service(UserService(user_name, self.local_groups), cpu=1.0, ram=1.0, availability=1.0, storage=1.0, gpu=1.0)
+                self.application.add_service(UserService(user_name, self.local_groups), cpu=4.0, ram=8.0, availability=1.0, storage=1.0, gpu=1.0)
 
         for i in range(self.cloud_count):
             self.add_user_cloud_edge(user_num, self.get_cloud_node_name(i))
@@ -253,7 +253,7 @@ class MyInfrastructure:
         )
         self.application.add_edge(
             self.get_cloud_node_name(cloud_num_1), self.get_cloud_node_name(cloud_num_2),
-            latency=adjacency * vars.CLOUD_CLOUD_LATENCY,
+            latency= adjacency * vars.CLOUD_CLOUD_LATENCY,
             bandwidth=10000.0,
             symmetric=True,
             weight = 100.0
