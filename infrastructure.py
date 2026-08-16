@@ -1,7 +1,9 @@
 from math import sqrt, ceil
 
+import networkx as nx
 from eclypse.graph import Infrastructure, Application
 from eclypse.graph.assets.defaults import cpu, ram, latency, bandwidth, availability, storage, gpu
+from networkx.classes import Graph
 
 from my_model.cloudService import CloudService
 from my_model.fogService import FogService
@@ -21,21 +23,30 @@ class MyInfrastructure:
     local_groups: list
     local_group_cloud_ids: list
 
+
     def generate_new_infrastructure(self, model_type: str, infrastructure_type: int) -> None:
         self.model_type = model_type
 
+        def custom_pathfinder(graph: Graph, source: str, target: str):
+            path = nx.shortest_path(graph, source=source, target=target, weight="weight")
+            result = []
+            for i in path:
+                result.append(str(i))
+
+            return result
+
         self.infrastructure = Infrastructure(
+            path_algorithm = custom_pathfinder,
             infrastructure_id="my-infra",
             node_assets={"cpu": cpu(), "ram": ram(), "availability": availability(), "storage": storage(), "gpu": gpu()},
-            edge_assets={"latency": latency(), "bandwidth": bandwidth()},
+            edge_assets={"latency": latency()},
         )
 
         self.application = Application(
             application_id="app",
             node_assets={"cpu": cpu(), "ram": ram(), "availability": availability(), "storage": storage(), "gpu": gpu()},
-            edge_assets={"latency": latency(), "bandwidth": bandwidth()}
+            edge_assets={"latency": latency(), "bandwidth": bandwidth(), "weight": bandwidth()}
         )
-
         self.cloud_count = 0
         self.fog_cluster_count = 0
         self.fog_cluster_counts = []
@@ -82,14 +93,12 @@ class MyInfrastructure:
         for i in range(len(self.local_group_cloud_ids)):
             region_adjacency.append([])
             for j in range(len(self.local_group_cloud_ids)):
-                diff = abs(j - i)
+                diff: float = abs(j - i)
                 diff = min(diff, len(self.local_group_cloud_ids) - diff)
                 diff = ceil(sqrt(diff))
-                if diff == 0:
-                    diff = 1
+                diff += 1
                 region_adjacency[i].append(diff)
 
-        print(region_adjacency)
         self.add_cloud_edges(region_adjacency)
 
     def create_region(self, cluster_numbers):
@@ -205,72 +214,82 @@ class MyInfrastructure:
         self.infrastructure.add_edge(
             self.get_fog_node_name(cluster_num, fog_num_1), self.get_fog_node_name(cluster_num, fog_num_2),
             latency=vars.FOG_FOG_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
         self.application.add_edge(
             self.get_fog_node_name(cluster_num, fog_num_1), self.get_fog_node_name(cluster_num, fog_num_2),
             latency=vars.FOG_FOG_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
 
     def add_mixed_edge(self, cluster_num: int, fog_num: int, cloud_num: int) -> None:
         self.infrastructure.add_edge(
             self.get_fog_node_name(cluster_num, fog_num), self.get_cloud_node_name(cloud_num),
             latency=vars.FOG_CLOUD_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
         self.application.add_edge(
             self.get_fog_node_name(cluster_num, fog_num), self.get_cloud_node_name(cloud_num),
             latency=vars.FOG_CLOUD_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
+
         )
 
     def add_cloud_edge(self, cloud_num_1: int, cloud_num_2: int, adjacency: float) -> None:
         self.infrastructure.add_edge(
             self.get_cloud_node_name(cloud_num_1), self.get_cloud_node_name(cloud_num_2),
             latency= adjacency * vars.CLOUD_CLOUD_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
         self.application.add_edge(
             self.get_cloud_node_name(cloud_num_1), self.get_cloud_node_name(cloud_num_2),
             latency=adjacency * vars.CLOUD_CLOUD_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
 
     def add_user_fog_edge(self,user_id: int, other_node: str) -> None:
         self.infrastructure.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_FOG_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
         self.application.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_FOG_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
 
     def add_user_cloud_edge(self,user_id: int, other_node: str) -> None:
         self.infrastructure.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_CLOUD_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
         self.application.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_CLOUD_LATENCY,
-            bandwidth=100.0,
-            symmetric=True
+            bandwidth=10000.0,
+            symmetric=True,
+            weight = 100.0
         )
-
     @staticmethod
     def get_cloud_node_name(num: int) -> str:
         return "cloud-" + str(num)

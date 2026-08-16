@@ -77,7 +77,7 @@ class CloudService(Service):
 #======================================================================================================================
 
     def __init__(self, service_id: str, local_neighbors):
-        super().__init__(service_id, store_step=True)
+        super().__init__(service_id, store_step=False)
         self.i = 0
         self.local_neighbors = local_neighbors
 

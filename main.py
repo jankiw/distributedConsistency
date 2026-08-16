@@ -41,15 +41,14 @@ def run_simulation(model: str, infrastructure) -> None:
     simulation.step()
 
     loop = asyncio.get_event_loop()
-    forecast = loop.run_until_complete(wait_for_end())
-    loop.close()
+    loop.run_until_complete(wait_for_end())
 
     simulation.stop()
 
     application_frame = simulation.report.application()
     service_frame = simulation.report.service()
 
-    print(application_frame.head())
+    print(application_frame)
     print(service_frame.head())
 
 

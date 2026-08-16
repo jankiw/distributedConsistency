@@ -1,5 +1,7 @@
 import asyncio
 import os
+import time
+
 import numpy as np
 
 from my_model import coordinator
@@ -28,11 +30,17 @@ class UserService(Service):
     current_group: int = None
     rng = None
 
+    total_time: float
+    op_count: int
+
     def __init__(self, service_id: str, local_groups):
         super().__init__(service_id, store_step=True)
         self.i = 0
         self.local_groups = local_groups
         self.rng = np.random.default_rng(_get_id_number(self.id))
+
+        self.total_time = 0.0
+        self.op_count = 0
 
 
     async def step(self):
@@ -52,10 +60,12 @@ class UserService(Service):
                 while not await self.coordinator.is_end.remote():
                     await asyncio.sleep(0.05)
                 await asyncio.sleep(2 * vars.SIMULATION_END_CLEANUP_TIME)
-                return 1
+                return {"total_time": self.my_total_time, "op_count": self.op_count, "avg_time": self.my_total_time / self.op_count}
         return 1
 
     async def _send_op(self, op_type: str, value: str):
+        start_time = time.time()
+
         neighbor: str
         if self.current_group == GLOBAL_GROUP:
             neighbor = self.rng.choice(self.node_neighbors)
@@ -91,6 +101,10 @@ class UserService(Service):
 
         msg = await self.mpi.recv()
         self._recv_msg(msg)
+
+        end_time = time.time()
+        self.total_time += end_time - start_time
+        self.op_count += 1
 
     def _recv_msg(self, msg):
         self.logger.info("received confirmation " + str(self.i))

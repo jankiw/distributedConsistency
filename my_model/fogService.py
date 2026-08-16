@@ -102,7 +102,7 @@ class FogService(Service):
 # ======================================================================================================================
 
     def __init__(self, service_id: str):
-        super().__init__(service_id, store_step=True)
+        super().__init__(service_id, store_step=False)
         self.i = 0
 
     async def step(self):
