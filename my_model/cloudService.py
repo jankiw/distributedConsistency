@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import os
+import time
 from asyncio import Task
 
 from my_model import coordinator, fogService
@@ -287,6 +288,7 @@ class CloudService(Service):
         op: dict = body[vars.OPERATION]
         req_clock: dict = body[vars.VECTOR_CLOCK]
         network_range: str = body[vars.NETWORK_RANGE]
+        self.logger.info(time.time() - body["time"])
 
         await self._wait_for_req_clock(req_clock)
         self._perform_operation(op)

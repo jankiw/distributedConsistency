@@ -1,4 +1,4 @@
-from math import sqrt, ceil
+from math import sqrt, ceil, inf
 
 import networkx as nx
 from eclypse.graph import Infrastructure, Application
@@ -214,14 +214,14 @@ class MyInfrastructure:
         self.infrastructure.add_edge(
             self.get_fog_node_name(cluster_num, fog_num_1), self.get_fog_node_name(cluster_num, fog_num_2),
             latency=vars.FOG_FOG_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
         self.application.add_edge(
             self.get_fog_node_name(cluster_num, fog_num_1), self.get_fog_node_name(cluster_num, fog_num_2),
             latency=vars.FOG_FOG_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
@@ -230,14 +230,14 @@ class MyInfrastructure:
         self.infrastructure.add_edge(
             self.get_fog_node_name(cluster_num, fog_num), self.get_cloud_node_name(cloud_num),
             latency=vars.FOG_CLOUD_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
         self.application.add_edge(
             self.get_fog_node_name(cluster_num, fog_num), self.get_cloud_node_name(cloud_num),
             latency=vars.FOG_CLOUD_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
 
@@ -247,14 +247,14 @@ class MyInfrastructure:
         self.infrastructure.add_edge(
             self.get_cloud_node_name(cloud_num_1), self.get_cloud_node_name(cloud_num_2),
             latency= adjacency * vars.CLOUD_CLOUD_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
         self.application.add_edge(
             self.get_cloud_node_name(cloud_num_1), self.get_cloud_node_name(cloud_num_2),
             latency= adjacency * vars.CLOUD_CLOUD_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
@@ -263,14 +263,14 @@ class MyInfrastructure:
         self.infrastructure.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_FOG_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
         self.application.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_FOG_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
@@ -279,14 +279,14 @@ class MyInfrastructure:
         self.infrastructure.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_CLOUD_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )
         self.application.add_edge(
             self.get_user_node_name(user_id), other_node,
             latency=vars.USER_CLOUD_LATENCY,
-            bandwidth=10000.0,
+            bandwidth=1000000000,
             symmetric=True,
             weight = 100.0
         )

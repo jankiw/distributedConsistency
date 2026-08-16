@@ -2,6 +2,7 @@ import asyncio
 import copy
 import json
 import os
+import time
 from asyncio import Task
 from collections import deque
 
@@ -292,6 +293,7 @@ class FogService(Service):
 
     async def _handle_user_task(self, body: dict):
         op: dict = body[vars.OPERATION]
+        self.logger.info(time.time() - body["time"])
         if vars.is_write(op):
             while True:
                 with _get_raft_lock():

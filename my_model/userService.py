@@ -78,7 +78,7 @@ class UserService(Service):
             vars.TYPE: op_type,
             vars.VALUE: value
         }
-        self.logger.info("sent to " + neighbor + " op " + str(op[vars.ID]))
+        #self.logger.info("sent to " + neighbor + " op " + str(op[vars.ID]))
         is_write: bool = vars.is_write(op)
         if is_write or self.session_guarantees.__contains__(vars.READ_YOUR_WRITES):
             if self.write_clock.get(self.session_id) is not None:
@@ -92,7 +92,8 @@ class UserService(Service):
             vars.ID: self.session_id,
             vars.OPERATION: op,
             vars.NETWORK_RANGE: vars.GLOBAL_RANGE,
-            vars.VECTOR_CLOCK: req_clock
+            vars.VECTOR_CLOCK: req_clock,
+            "time": time.time()
         }
         msg = {vars.MESSAGE_BODY: body, vars.MESSAGE_TYPE: vars.USER_TASK}
         # self.logger.info(msg)
@@ -108,7 +109,7 @@ class UserService(Service):
         self.op_count += 1
 
     def _recv_msg(self, msg):
-        self.logger.info("received confirmation " + str(self.i))
+        #self.logger.info("received confirmation " + str(self.i))
         body: dict = msg[vars.MESSAGE_BODY]
         res: bool = body[vars.RESULT]
         op: dict = body[vars.OPERATION]
