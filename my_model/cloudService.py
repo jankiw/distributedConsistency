@@ -115,6 +115,7 @@ class CloudService:
         #self.log(str(msg))
 
         for recipient in recipients:
+            #self.log(recipient)
             self.neighbours[recipient]["connection"].send(msg)
 
     async def _recv_msg(self, msg):
@@ -127,22 +128,22 @@ class CloudService:
             match msg_type:
 
                 case vars.USER_TASK:
-                    await self._handle_user_task(body)
+                    asyncio.create_task(self._handle_user_task(body))
 
                 case vars.CLOUD_TASK:
-                    await self._handle_cloud_task(body)
+                    asyncio.create_task( self._handle_cloud_task(body))
 
                 case vars.FOG_TASK:
-                    await self._handle_fog_task(body)
+                    asyncio.create_task( self._handle_fog_task(body))
 
                 case vars.CREATE_CLUSTER:
-                    await self._handle_create_cluster(body)
+                    asyncio.create_task( self._handle_create_cluster(body))
 
                 case vars.LEADER_CHANGE:
-                    await self._handle_change_leader(body)
+                    asyncio.create_task( self._handle_change_leader(body))
 
                 case vars.TASK_REQUEST:
-                    await self._handle_task_request(body)
+                    asyncio.create_task( self._handle_task_request(body))
 
         except asyncio.CancelledError:
             return
@@ -172,7 +173,7 @@ class CloudService:
                 operation_id = queue.pop()
                 timestamp_clock = self.op_assocs[operation_id][vars.VECTOR_CLOCK]
                 with self.fog_lock:
-                    await self._send_msg(
+                    asyncio.create_task(self._send_msg(
                         vars.CLOUD_TASK,
                         {
                             vars.ID: self.op_assocs[operation_id][vars.ID],
@@ -180,9 +181,10 @@ class CloudService:
                             vars.VECTOR_CLOCK: timestamp_clock
                         },
                         [self.fog_contacts[fog_id]]
-                    )
+                    ))
                 for key in timestamp_clock:
                     req_clock[key] = max(timestamp_clock.get(key), coalesce(req_clock.get(key), 0))
+            await asyncio.sleep(0.01)
 
     async def _handle_change_leader(self, body: dict):
         address: str = body[vars.ID]
@@ -203,11 +205,11 @@ class CloudService:
             self.fog_clocks[cluster_id] = {}
             self.fog_contacts[cluster_id] = address
 
-            await self._send_msg(
+            asyncio.create_task( self._send_msg(
                 vars.CREATE_CLUSTER,
                 {vars.FOG_ID: cluster_id},
                 [address]
-            )
+            ))
 
     async def _handle_cloud_task(self, body: dict):
 
@@ -228,7 +230,6 @@ class CloudService:
             self.history.append(op[vars.ID])
 
     async def _handle_fog_task(self, body: dict):
-
         fog_id: str = body[vars.FOG_ID]
         session_id: str = body[vars.ID]
         op: dict = body[vars.OPERATION]
@@ -253,6 +254,7 @@ class CloudService:
 
         with self.history_lock:
             self.history.append(op[vars.ID])
+
 
     async def _handle_user_task(self, body: dict):
 
@@ -283,7 +285,7 @@ class CloudService:
         else:
             with self.vector_lock:
                 response_body[vars.VECTOR_CLOCK] = copy.deepcopy(self.vector_clock)
-        await self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)])
+        asyncio.create_task(self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)]))
 
 # ======================================================================================================================
 
@@ -302,11 +304,11 @@ class CloudService:
             else:
                 recipients = self.global_neighbors
             del body[vars.NETWORK_RANGE]
-            await  self._send_msg(
+            asyncio.create_task( self._send_msg(
                 vars.CLOUD_TASK,
                 body,
                 recipients
-            )
+            ))
 
     def _perform_operation(self, op: dict):
         # self.logger.info(str(op[vars.ID]) + " performed on node " + self.id)
@@ -325,4 +327,4 @@ class CloudService:
 
 
     def log(self, msg: str):
-        print(self.id + " " + msg, flush=True)
+        print(self.id + ": " + msg, flush=True)

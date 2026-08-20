@@ -66,7 +66,7 @@ class UserService:
                 self._end_session()
                 self._start_session()
 
-            await self._send_op(vars.WRITE_OP, "my value")
+            await self._send_op(self.rng.choice([vars.WRITE_OP, vars.READ_OP]), "my value")
 
             if self.i >= 20:
                 self.coordinator.send({
@@ -90,15 +90,17 @@ class UserService:
             vars.TYPE: op_type,
             vars.VALUE: value
         }
-        self.log("sent to " + neighbor + " op " + str(op[vars.ID]))
         is_write: bool = vars.is_write(op)
         if is_write or self.session_guarantees.__contains__(vars.READ_YOUR_WRITES):
             if self.write_clock.get(self.session_id) is not None:
-                req_clock[self.id] = self.write_clock.get(self.session_id)
+                req_clock[self.session_id] = self.write_clock.get(self.session_id)
 
         if (is_write and self.session_guarantees.__contains__(vars.WRITES_FOLLOW_READS)) or (not is_write and self.session_guarantees.__contains__(vars.MONOTONIC_READS)):
             for key in self.read_clock:
                 req_clock[key] = max(vars.coalesce(req_clock.get(key), 0), self.read_clock.get(key))
+
+        self.log("sent to " + neighbor + " " + op_type + " op with id " + str(op[vars.ID]) + " and requirements " + str(
+            req_clock))
 
         body: dict = {
             vars.ID: self.session_id,
@@ -135,7 +137,7 @@ class UserService:
             return
 
         if vars.is_write(op):
-            self.write_clock[self.id] = vars.coalesce(self.write_clock.get(self.id), 0) + 1
+            self.write_clock[self.session_id] = vars.coalesce(self.write_clock.get(self.session_id), 0) + 1
         else:
             v: dict = body[vars.VECTOR_CLOCK]
             for key in v:
@@ -151,11 +153,12 @@ class UserService:
             vars.MONOTONIC_READS: self.rng.choice([True, False]),
             vars.MONOTONIC_WRITES: self.rng.choice([True, False])
         }
-        self.session_network_range = self.rng.choice([vars.GLOBAL_RANGE, vars.LOCAL_RANGE])
+        self.session_network_range = vars.GLOBAL_RANGE#self.rng.choice([vars.GLOBAL_RANGE, vars.LOCAL_RANGE])
         if self.session_network_range == vars.GLOBAL_RANGE:
             self.current_group = GLOBAL_GROUP
         else:
             self.current_group = self.rng.choice(range(len(self.local_groups)))
+
 
     def _end_session(self):
         self.write_clock = {}
@@ -170,4 +173,4 @@ class UserService:
         self._start_session()
 
     def log(self, msg: str):
-        print(self.id + " " + msg, flush=True)
+        print(self.id + ": " + msg, flush=True)
