@@ -154,6 +154,7 @@ class CloudService:
         fog_id: str = body[vars.FOG_ID]
         req_clock: dict = body[vars.VECTOR_CLOCK]
         queue: deque = deque()
+        log = []
         while True:
             await self._wait_for_req_clock(req_clock)
             with self.fog_lock:
@@ -182,9 +183,12 @@ class CloudService:
                         },
                         [self.fog_contacts[fog_id]]
                     ))
+                    log.append(operation_id)
                 for key in timestamp_clock:
                     req_clock[key] = max(timestamp_clock.get(key), coalesce(req_clock.get(key), 0))
             await asyncio.sleep(0.01)
+
+        self.log("sent all requested tasks to " + str(self.fog_contacts[fog_id]) + ", " + str(log))
 
     async def _handle_change_leader(self, body: dict):
         address: str = body[vars.ID]

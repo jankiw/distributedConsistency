@@ -75,14 +75,14 @@ class MyInfrastructure:
             [3],
             []
         ])
-        self.create_region([
-            [],
-            [6]
-        ])
-        self.create_region([
-            [3],
-            [2]
-        ])
+        # self.create_region([
+        #     [],
+        #     [6]
+        # ])
+        # self.create_region([
+        #     [3],
+        #     [2]
+        # ])
 
         self.create_region_adjacency()
 

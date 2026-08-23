@@ -66,7 +66,7 @@ class UserService:
                 self._end_session()
                 self._start_session()
 
-            await self._send_op(self.rng.choice([vars.WRITE_OP, vars.READ_OP]), "my value")
+            await self._send_op(str(self.rng.choice([vars.WRITE_OP, vars.READ_OP])), "my value")
 
             if self.i >= 20:
                 self.coordinator.send({
@@ -81,9 +81,9 @@ class UserService:
 
         neighbor: str
         if self.current_group == GLOBAL_GROUP:
-            neighbor = self.rng.choice(list(self.neighbours.keys()))
+            neighbor = str(self.rng.choice(list(self.neighbours.keys())))
         else:
-            neighbor = self.rng.choice(self.local_groups[self.current_group])
+            neighbor = str(self.rng.choice(self.local_groups[self.current_group]))
         req_clock: dict = {}
         op: dict = {
             vars.ID: self.id + "_" + str(self.i),
@@ -99,9 +99,6 @@ class UserService:
             for key in self.read_clock:
                 req_clock[key] = max(vars.coalesce(req_clock.get(key), 0), self.read_clock.get(key))
 
-        self.log("sent to " + neighbor + " " + op_type + " op with id " + str(op[vars.ID]) + " and requirements " + str(
-            req_clock))
-
         body: dict = {
             vars.ID: self.session_id,
             vars.OPERATION: op,
@@ -112,6 +109,8 @@ class UserService:
         msg = {vars.MESSAGE_BODY: body, vars.MESSAGE_TYPE: vars.USER_TASK}
         # self.logger.info(msg)
         self.neighbours[neighbor]["connection"].send(msg)
+        self.log("sent to " + neighbor + " " + op_type + " op with id " + str(op[vars.ID]) + " and requirements " + str(
+            req_clock))
 
         senders = []
         for key in self.neighbours:
@@ -148,16 +147,16 @@ class UserService:
         self.read_clock = {}
         self.session_id = self.id + "_" + str(self.i)
         self.session_guarantees = {
-            vars.READ_YOUR_WRITES: self.rng.choice([True, False]),
-            vars.WRITES_FOLLOW_READS: self.rng.choice([True, False]),
-            vars.MONOTONIC_READS: self.rng.choice([True, False]),
-            vars.MONOTONIC_WRITES: self.rng.choice([True, False])
+            vars.READ_YOUR_WRITES: bool(self.rng.choice([True, False])),
+            vars.WRITES_FOLLOW_READS: bool(self.rng.choice([True, False])),
+            vars.MONOTONIC_READS: bool(self.rng.choice([True, False])),
+            vars.MONOTONIC_WRITES: bool(self.rng.choice([True, False]))
         }
-        self.session_network_range = vars.GLOBAL_RANGE#self.rng.choice([vars.GLOBAL_RANGE, vars.LOCAL_RANGE])
+        self.session_network_range = vars.GLOBAL_RANGE#str(self.rng.choice([vars.GLOBAL_RANGE, vars.LOCAL_RANGE]))
         if self.session_network_range == vars.GLOBAL_RANGE:
             self.current_group = GLOBAL_GROUP
         else:
-            self.current_group = self.rng.choice(range(len(self.local_groups)))
+            self.current_group = int(self.rng.choice(range(len(self.local_groups))))
 
 
     def _end_session(self):

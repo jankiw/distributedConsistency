@@ -127,7 +127,6 @@ class FogService:
 
         if _get_id_number(self.id) == 1:
             raft_node.campaign()
-            self.log(self.id)
             await self._send_msg(
                 vars.CREATE_CLUSTER,
                 {vars.ID: self.id},
@@ -193,8 +192,6 @@ class FogService:
 
     async def _send_msg(self, msg_type: int, body, recipients: list):
         msg = {vars.MESSAGE_BODY: body, vars.MESSAGE_TYPE: msg_type}
-        if self.id == "edge-3-0" and msg_type != vars.RAFT_MSG:
-            self.log("sent" + str(msg))
 
         # if msg[vars.MESSAGE_TYPE] != vars.RAFT_MSG:
         #     self.log("sending "+str(msg) + " to " + str(recipients))
@@ -207,8 +204,6 @@ class FogService:
             msg_type = msg[vars.MESSAGE_TYPE]
             body = msg[vars.MESSAGE_BODY]
 
-            if self.id == "edge-3-0" and msg_type != vars.RAFT_MSG:
-                self.log("rec" + str(msg))
 
             # if msg[vars.MESSAGE_TYPE] != vars.RAFT_MSG:
             #     self.log("received " + str(msg))
@@ -250,6 +245,10 @@ class FogService:
 
     async def _handle_cloud_task(self, msg: dict):
         body = msg[vars.MESSAGE_BODY]
+
+        with self.raft_lock:
+            if self.raft_leader == self.id:
+                self.log("received requested cloud op" + str(msg))
         while True:
             with self.raft_lock:
                 leader_id = self.raft_node.get_raft().get_leader_id()
@@ -273,6 +272,10 @@ class FogService:
     async def _handle_user_task(self, msg: dict):
         body = msg[vars.MESSAGE_BODY]
         op: dict = body[vars.OPERATION]
+
+        with self.raft_lock:
+            if (not vars.is_write(op)) or (self.raft_leader == self.id):
+                self.log("received op " + str(msg))
         #self.logger.info(time.time() - body["time"])
         if vars.is_write(op):
             while True:
@@ -304,7 +307,27 @@ class FogService:
         session_id: str = data[vars.ID]
         op: dict = data[vars.OPERATION]
         req_clock: dict = data[vars.VECTOR_CLOCK]
+
+        with self.raft_lock:
+            if (not vars.is_write(op)) or (self.raft_leader == self.id):
+                self.log("received op in raft" + str(data))
+
+        self.log(str(self.vector_clock))
+        if not self._check_req_clock(req_clock):
+            with self.raft_lock:
+                if (not vars.is_write(op)) or (self.raft_leader == self.id):
+                    await self._send_msg(
+                        vars.TASK_REQUEST,
+                        {
+                            vars.FOG_ID: get_fog_id(self.id),
+                            vars.VECTOR_CLOCK: req_clock
+                        },
+                        [self.cloud_node]
+                    )
+                    self.log("requested data from cloud")
         await self._wait_for_req_clock(req_clock)
+
+        self.log("clock received")
         self._perform_operation(op)
         response_body = {
             vars.OPERATION: op,
@@ -320,19 +343,27 @@ class FogService:
                 self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
             with self.history_lock:
                 self.history.append(op[vars.ID])
-            with self.queue_lock:
-                self.queue.append(data)
+            with self.raft_lock:
+                if self.raft_node.get_raft().get_leader_id() == _get_id_number(self.id):
+                    with self.queue_lock:
+                        self.queue.append(data)
         else:
             with self.vector_lock:
                 response_body[vars.VECTOR_CLOCK] = copy.deepcopy(self.vector_clock)
+        self.log("op completed here")
         with self.raft_lock:
             if (not vars.is_write(op)) or (self.raft_leader == self.id):
+                self.log("sent confirmation for " + str(data))
                 asyncio.create_task(self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)]))
 
     async def _raft_handle_cloud_task(self, data):
         session_id: str = data[vars.ID]
         op: dict = data[vars.OPERATION]
         req_clock: dict = data[vars.VECTOR_CLOCK]
+
+        with self.raft_lock:
+            if self.raft_leader == self.id:
+                self.log("received requested cloud op in raft " + str(data))
         # self.log(str(req_clock))
         # with self.vector_lock:
         #     self.log(str(self.vector_clock))
@@ -356,17 +387,8 @@ class FogService:
         pass
 
     async def _wait_for_req_clock(self, req_clock: dict):
-        if not self._check_req_clock(req_clock):
-            await self._send_msg(
-                vars.TASK_REQUEST,
-                {
-                    vars.FOG_ID: get_fog_id(self.id),
-                    vars.VECTOR_CLOCK: req_clock
-                },
-                [self.cloud_node]
-            )
-            while not self._check_req_clock(req_clock):
-                await asyncio.sleep(vars.CLOCK_WAIT_TIME)
+        while not self._check_req_clock(req_clock):
+            await asyncio.sleep(vars.CLOCK_WAIT_TIME)
 
     def _check_req_clock(self, req_clock: dict) -> bool:
         with self.vector_lock:
