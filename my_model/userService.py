@@ -53,7 +53,7 @@ class UserService(Service):
                 self._end_session()
                 self._start_session()
 
-            await self._send_op(vars.WRITE_OP, "my value")
+            await self._send_op(str(self.rng.choice([vars.WRITE_OP, vars.READ_OP])), "my value")
 
             if self.i >= 20:
                 await self.coordinator.user_finish.remote()
@@ -69,20 +69,20 @@ class UserService(Service):
 
         neighbor: str
         if self.current_group == GLOBAL_GROUP:
-            neighbor = self.rng.choice(self.node_neighbors)
+            neighbor = str(self.rng.choice(self.node_neighbors))
         else:
-            neighbor = self.rng.choice(self.local_groups[self.current_group])
+            neighbor = str(self.rng.choice(self.local_groups[self.current_group]))
         req_clock: dict = {}
         op: dict = {
-            vars.ID: self.id + "_" + str(self.i),
+            vars.ID: self.session_id + "_" + str(self.i),
             vars.TYPE: op_type,
             vars.VALUE: value
         }
-        #self.logger.info("sent to " + neighbor + " op " + str(op[vars.ID]))
+        self.logger.info("sent to " + neighbor + " op " + str(op[vars.ID]))
         is_write: bool = vars.is_write(op)
         if is_write or self.session_guarantees.__contains__(vars.READ_YOUR_WRITES):
             if self.write_clock.get(self.session_id) is not None:
-                req_clock[self.id] = self.write_clock.get(self.session_id)
+                req_clock[self.session_id] = self.write_clock.get(self.session_id)
 
         if (is_write and self.session_guarantees.__contains__(vars.WRITES_FOLLOW_READS)) or (not is_write and self.session_guarantees.__contains__(vars.MONOTONIC_READS)):
             for key in self.read_clock:
@@ -97,9 +97,7 @@ class UserService(Service):
         }
         msg = {vars.MESSAGE_BODY: body, vars.MESSAGE_TYPE: vars.USER_TASK}
         # self.logger.info(msg)
-        confirm = self.mpi.send([neighbor], msg)
-        if asyncio.iscoroutine(confirm):
-            await confirm
+        await self.mpi.send([neighbor], msg)
 
         msg = await self.mpi.recv()
         self._recv_msg(msg)
@@ -109,7 +107,7 @@ class UserService(Service):
         self.op_count += 1
 
     def _recv_msg(self, msg):
-        #self.logger.info("received confirmation " + str(self.i))
+        self.logger.info("received confirmation " + str(self.i))
         body: dict = msg[vars.MESSAGE_BODY]
         res: bool = body[vars.RESULT]
         op: dict = body[vars.OPERATION]
@@ -120,7 +118,7 @@ class UserService(Service):
             return
 
         if vars.is_write(op):
-            self.write_clock[self.id] = vars.coalesce(self.write_clock.get(self.id), 0) + 1
+            self.write_clock[self.session_id] = vars.coalesce(self.write_clock.get(self.session_id), 0) + 1
         else:
             v: dict = body[vars.VECTOR_CLOCK]
             for key in v:
@@ -131,16 +129,16 @@ class UserService(Service):
         self.read_clock = {}
         self.session_id = self.id + "_" + str(self.i)
         self.session_guarantees = {
-            vars.READ_YOUR_WRITES: self.rng.choice([True, False]),
-            vars.WRITES_FOLLOW_READS: self.rng.choice([True, False]),
-            vars.MONOTONIC_READS: self.rng.choice([True, False]),
-            vars.MONOTONIC_WRITES: self.rng.choice([True, False])
+            vars.READ_YOUR_WRITES: bool(self.rng.choice([True, False])),
+            vars.WRITES_FOLLOW_READS: bool(self.rng.choice([True, False])),
+            vars.MONOTONIC_READS: bool(self.rng.choice([True, False])),
+            vars.MONOTONIC_WRITES: bool(self.rng.choice([True, False]))
         }
-        self.session_network_range = self.rng.choice([vars.GLOBAL_RANGE, vars.LOCAL_RANGE])
+        self.session_network_range = vars.GLOBAL_RANGE#str(self.rng.choice([vars.GLOBAL_RANGE, vars.LOCAL_RANGE]))
         if self.session_network_range == vars.GLOBAL_RANGE:
             self.current_group = GLOBAL_GROUP
         else:
-            self.current_group = self.rng.choice(range(len(self.local_groups)))
+            self.current_group = int(self.rng.choice(range(len(self.local_groups))))
 
     def _end_session(self):
         self.write_clock = {}

@@ -140,9 +140,7 @@ class CloudService(Service):
         # self.logger.info(msg)
         # self.logger.info(recipients)
 
-        confirm = self.mpi.send(recipients, msg)
-        if asyncio.iscoroutine(confirm):
-            await confirm
+        await self.mpi.send(recipients, msg)
 
     async def _recv_msg(self, msg):
         try:
@@ -155,22 +153,22 @@ class CloudService(Service):
             match msg_type:
 
                 case vars.USER_TASK:
-                    await self._handle_user_task(body)
+                    asyncio.create_task( self._handle_user_task(body))
 
                 case vars.CLOUD_TASK:
-                    await self._handle_cloud_task(body)
+                    asyncio.create_task( self._handle_cloud_task(body))
 
                 case vars.FOG_TASK:
-                    await self._handle_fog_task(body)
+                    asyncio.create_task( self._handle_fog_task(body))
 
                 case vars.CREATE_CLUSTER:
-                    await self._handle_create_cluster(body)
+                    asyncio.create_task( self._handle_create_cluster(body))
 
                 case vars.LEADER_CHANGE:
-                    await self._handle_change_leader(body)
+                    asyncio.create_task( self._handle_change_leader(body))
 
                 case vars.TASK_REQUEST:
-                    await self._handle_task_request(body)
+                    asyncio.create_task( self._handle_task_request(body))
 
         except asyncio.CancelledError:
             return
@@ -200,7 +198,7 @@ class CloudService(Service):
                 operation_id = queue.pop()
                 timestamp_clock = self.op_assocs[operation_id][vars.VECTOR_CLOCK]
                 with _get_fog_lock():
-                    await self._send_msg(
+                    asyncio.create_task( self._send_msg(
                         vars.CLOUD_TASK,
                         {
                             vars.ID: self.op_assocs[operation_id][vars.ID],
@@ -208,7 +206,7 @@ class CloudService(Service):
                             vars.VECTOR_CLOCK: timestamp_clock
                         },
                         [self.fog_contacts[fog_id]]
-                    )
+                    ))
                 for key in timestamp_clock:
                     req_clock[key] = max(timestamp_clock.get(key), coalesce(req_clock.get(key), 0))
 
@@ -231,11 +229,11 @@ class CloudService(Service):
             self.fog_clocks[cluster_id] = {}
             self.fog_contacts[cluster_id] = address
 
-            await self._send_msg(
+            asyncio.create_task( self._send_msg(
                 vars.CREATE_CLUSTER,
                 {vars.FOG_ID: cluster_id},
                 [address]
-            )
+            ))
 
     async def _handle_cloud_task(self, body: dict):
 
@@ -311,7 +309,7 @@ class CloudService(Service):
         else:
             with _get_vector_lock():
                 response_body[vars.VECTOR_CLOCK] = copy.deepcopy(self.vector_clock)
-        await self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)])
+        asyncio.create_task(self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)]))
 
 # ======================================================================================================================
 
@@ -330,11 +328,11 @@ class CloudService(Service):
             else:
                 recipients = self.global_neighbors
             del body[vars.NETWORK_RANGE]
-            await  self._send_msg(
+            asyncio.create_task(  self._send_msg(
                 vars.CLOUD_TASK,
                 body,
                 recipients
-            )
+            ))
 
     def _perform_operation(self, op: dict):
         # self.logger.info(str(op[vars.ID]) + " performed on node " + self.id)

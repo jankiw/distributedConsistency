@@ -154,7 +154,7 @@ class FogService(Service):
         for neighbor in self.edge_neighbors:
             voters.append(_get_id_number(neighbor))
         raft_storage = MemStorage.new_with_conf_state(ConfState(voters=voters, learners=[]))
-        raft_config = Config(id=_get_id_number(self.id), election_tick=10, heartbeat_tick=3)
+        raft_config = Config(id=_get_id_number(self.id), election_tick=1000000, heartbeat_tick=10)
         raft_node = InMemoryRawNode(raft_config, raft_storage, logger)
 
         split_id: list = self.id.split('-')
@@ -163,11 +163,11 @@ class FogService(Service):
 
         if _get_id_number(self.id) == 1:
             raft_node.campaign()
-            await self._send_msg(
+            asyncio.create_task(self._send_msg(
                 vars.CREATE_CLUSTER,
                 {vars.ID: self.id},
                 [self.cloud_node]
-            )
+            ))
         _set_raft_node(raft_node)
         _set_raft_storage(raft_storage)
         _set_raft_lock()
@@ -202,13 +202,13 @@ class FogService(Service):
                         messages += ready.take_persisted_messages()
                         for message in messages:
                             recipients = [_get_string_number(self.id, message.get_to())]
-                            await self._send_msg(vars.RAFT_MSG, message.encode(), recipients)
+                            asyncio.create_task( self._send_msg(vars.RAFT_MSG, message.encode(), recipients))
 
                         committed_entries = ready.take_committed_entries()
                         for entry in committed_entries:
                             if entry.get_entry_type() == EntryType.EntryNormal and entry.get_data():
                                 data = json.loads(entry.get_data().decode())
-                                await self._raft_handle_user_task(data)
+                                asyncio.create_task(self._raft_handle_task(data))
 
                         _get_raft_node().advance(ready.make_ref())
 
@@ -232,9 +232,7 @@ class FogService(Service):
         #     self.logger.info("a")
         #     self.logger.info(msg)
         #     self.logger.info(recipients)
-        confirm = self.mpi.send(recipients, msg)
-        if asyncio.iscoroutine(confirm):
-            await confirm
+        await self.mpi.send(recipients, msg)
 
     async def _recv_msg(self, msg):
         try:
@@ -252,10 +250,10 @@ class FogService(Service):
                         _get_raft_node().step(body)
 
                 case vars.USER_TASK:
-                    await self._handle_user_task(body)
+                    asyncio.create_task( self._handle_user_task(msg))
 
                 case vars.CLOUD_TASK:
-                    await self._handle_cloud_task(body)
+                    asyncio.create_task(self._handle_cloud_task(msg))
 
                 # case vars.CREATE_CLUSTER:
 
@@ -263,35 +261,44 @@ class FogService(Service):
         except asyncio.CancelledError:
             return
 
+    async def _raft_handle_task(self, msg):
+        msg_type = msg[vars.MESSAGE_TYPE]
+        body = msg[vars.MESSAGE_BODY]
+
+        match msg_type:
+
+            case vars.USER_TASK:
+                asyncio.create_task(self._raft_handle_user_task(body))
+
+            case vars.CLOUD_TASK:
+                asyncio.create_task(self._raft_handle_cloud_task(body))
+
 # ======================================================================================================================
 
-    async def _handle_cloud_task(self, body: dict):
-        if self.raft_leader != self.id:
-            await self._send_msg(
-                vars.USER_TASK,
-                body,
-                [self.raft_leader]
-            )
-            return
+    async def _handle_cloud_task(self, msg: dict):
+        body = msg[vars.MESSAGE_BODY]
 
-        session_id: str = body[vars.ID]
-        op: dict = body[vars.OPERATION]
-        req_clock: dict = body[vars.VECTOR_CLOCK]
+        while True:
+            with _get_raft_lock():
+                leader_id = _get_raft_node().get_raft().get_leader_id()
+                if leader_id != 0:
+                    leader_node = _get_string_number(self.id, leader_id)
 
-        await self._wait_for_req_clock(req_clock)
-        self._perform_operation(op)
+                    if leader_node != self.id:
+                        asyncio.create_task(self._send_msg(
+                            vars.CLOUD_TASK,
+                            body,
+                            [leader_node]
+                        ))
+                        return
+                    raft_msg: bytes = json.dumps(msg).encode()
+                    _get_raft_node().propose([], raft_msg)
+                    return
 
-        with _get_vector_lock():
-            self.op_assocs[op[vars.ID]] = {
-                vars.OPERATION: op,
-                vars.ID: session_id,
-                vars.VECTOR_CLOCK: copy.deepcopy(self.vector_clock)
-            }
-            self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
-        with _get_history_lock():
-            self.history.append(op[vars.ID])
+            await asyncio.sleep(0.05)
 
-    async def _handle_user_task(self, body: dict):
+    async def _handle_user_task(self, msg: dict):
+        body = msg[vars.MESSAGE_BODY]
         op: dict = body[vars.OPERATION]
         self.logger.info(time.time() - body["time"])
         if vars.is_write(op):
@@ -309,23 +316,32 @@ class FogService(Service):
                             )
                             return
                         # self.logger.info(_get_raft_node().get_raft().get_state())
-                        msg: bytes = json.dumps(body).encode()
-                        _get_raft_node().propose([], msg)
+                        raft_msg: bytes = json.dumps(msg).encode()
+                        _get_raft_node().propose([], raft_msg)
                         return
 
                 await asyncio.sleep(0.05)
 
         else:
-            with _get_raft_lock():
-                await self._raft_handle_user_task(body)
+            await self._raft_handle_user_task(body)
 
 
-    #in both places it is used with raft lock already in use
     async def _raft_handle_user_task(self, data):
         session_id: str = data[vars.ID]
         op: dict = data[vars.OPERATION]
         req_clock: dict = data[vars.VECTOR_CLOCK]
         network_range: str = data[vars.NETWORK_RANGE]
+        with _get_raft_lock():
+            if (not vars.is_write(op)) or (self.raft_leader == self.id):
+                if not self._check_req_clock(req_clock):
+                    asyncio.create_task( self._send_msg(
+                        vars.TASK_REQUEST,
+                        {
+                            vars.FOG_ID: get_fog_id(self.id),
+                            vars.VECTOR_CLOCK: req_clock
+                        },
+                        [self.cloud_node]
+            ))
 
         await self._wait_for_req_clock(req_clock)
         self._perform_operation(op)
@@ -343,14 +359,38 @@ class FogService(Service):
                 self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
             with _get_history_lock():
                 self.history.append(op[vars.ID])
-            with _get_queue_lock():
-                self.queue.append(data)
+            with _get_raft_lock():
+                if _get_raft_node().get_raft().get_leader_id() == _get_id_number(self.id):
+                    with _get_queue_lock():
+                        self.queue.append(data)
         else:
             with _get_vector_lock():
                 response_body[vars.VECTOR_CLOCK] = copy.deepcopy(self.vector_clock)
+        with _get_raft_lock():
+            if (not vars.is_write(op)) or (self.raft_leader == self.id):
+                asyncio.create_task( self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)]))
 
-        if (not vars.is_write(op)) or (self.raft_leader == self.id):
-            await self._send_msg(vars.TASK_CONFIRM, response_body, [vars.get_addr_from_session_id(session_id)])
+
+    async def _raft_handle_cloud_task(self, data):
+        session_id: str = data[vars.ID]
+        op: dict = data[vars.OPERATION]
+        req_clock: dict = data[vars.VECTOR_CLOCK]
+
+        # self.log(str(req_clock))
+        # with self.vector_lock:
+        #     self.log(str(self.vector_clock))
+        await self._wait_for_req_clock(req_clock)
+        self._perform_operation(op)
+
+        with _get_vector_lock():
+            self.op_assocs[op[vars.ID]] = {
+                vars.OPERATION: op,
+                vars.ID: session_id,
+                vars.VECTOR_CLOCK: copy.deepcopy(self.vector_clock)
+            }
+            self.vector_clock[session_id] = vars.coalesce(self.vector_clock.get(session_id), 0) + 1
+        with _get_history_lock():
+            self.history.append(op[vars.ID])
 
 # ======================================================================================================================
 
@@ -359,17 +399,8 @@ class FogService(Service):
         pass
 
     async def _wait_for_req_clock(self, req_clock: dict):
-        if not self._check_req_clock(req_clock):
-            await self._send_msg(
-                vars.TASK_REQUEST,
-                {
-                    vars.FOG_ID: get_fog_id(self.id),
-                    vars.VECTOR_CLOCK: req_clock
-                },
-                [self.cloud_node]
-            )
-            while not self._check_req_clock(req_clock):
-                await asyncio.sleep(vars.CLOCK_WAIT_TIME)
+        while not self._check_req_clock(req_clock):
+            await asyncio.sleep(vars.CLOCK_WAIT_TIME)
 
     def _check_req_clock(self, req_clock: dict) -> bool:
         with _get_vector_lock():
@@ -388,8 +419,8 @@ class FogService(Service):
         for i in range(len(queue_copy)):
             body = queue_copy.pop()
             body[vars.FOG_ID] = get_fog_id(self.id)
-            await  self._send_msg(
+            asyncio.create_task(  self._send_msg(
                 vars.FOG_TASK,
                 body,
                 [self.cloud_node]
-            )
+            ))
