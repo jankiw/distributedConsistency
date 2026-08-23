@@ -140,6 +140,7 @@ class FogService:
 
     async def _run_raft(self):
         while True:
+            self.log("raft running")
             try:
                 with self.raft_lock:
                     self.raft_node.tick()
@@ -264,6 +265,7 @@ class FogService:
                         return
                     raft_msg: bytes = json.dumps(msg).encode()
                     self.raft_node.propose([], raft_msg)
+                    self.log("proposed cloud op")
                     return
 
             await asyncio.sleep(0.05)

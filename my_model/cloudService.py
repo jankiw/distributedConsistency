@@ -112,7 +112,7 @@ class CloudService:
 
     async def _send_msg(self, msg_type: int, body, recipients: list):
         msg = {vars.MESSAGE_BODY: body, vars.MESSAGE_TYPE: msg_type}
-        #self.log(str(msg))
+        self.log(str(recipients) + " " + str(msg))
 
         for recipient in recipients:
             #self.log(recipient)
